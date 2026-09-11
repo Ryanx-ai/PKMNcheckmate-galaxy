@@ -1,0 +1,14 @@
+export type Role = 'Attacker' | 'Speedster' | 'All-Rounder' | 'Defender' | 'Supporter';
+export type Stats = { hp: number; attack: number; defense: number; special: number; resistance: number; speed: number; range: number; crit: number; regen: number; startingEnergy: number; energyPerAttack: number; energyOnDamage: number; maxEnergy: number; ultimateCost: number };
+export type Effect = 'blast' | 'chain' | 'drain' | 'heal' | 'stun' | 'burn' | 'ambush' | 'shield' | 'storm' | 'slow' | 'knockback';
+export type Family = { id: string; names: string[]; dex: number[]; cost: number; role: Role; traits: string[]; stats: Stats; move: string; effect: Effect; power: number; legendary?: boolean; utility?: boolean; targeting: 'nearest' | 'weakest' };
+export type Unit = { uid: string; family: string; star: number; cell: number | null; item?: string; bond: number };
+export type Reward = { id: string; kind: 'item' | 'wish' | 'gold' | 'heal'; name: string; description: string; value: string | number };
+export type Game = { version: 1; seed: number; serial: number; round: number; phase: 'prep' | 'combat' | 'result' | 'reward' | 'finished'; trainer: string; gold: number; hp: number; level: number; xp: number; units: Unit[]; shop: (string | null)[]; locked: boolean; inventory: string[]; wishes: string[]; charge: number; empowered: boolean; trainerTarget?: string; seenTraits: string[]; streak: number; wins: number; losses: number; lastIncome: number; message: string; rewards: Reward[]; legendary: boolean; lastResult?: CombatResult; history: { round: number; outcome: string; damage: number }[] };
+export type Command = { type: 'buy'; slot: number } | { type: 'move'; uid: string; cell: number | null } | { type: 'sell'; uid: string } | { type: 'refresh' | 'xp' | 'lock' } | { type: 'equip'; uid: string; item: string } | { type: 'unequip'; uid: string } | { type: 'ditto'; uid: string; target: string } | { type: 'power'; uid?: string } | { type: 'reward'; id: string };
+export type Status = { kind: 'burn' | 'stun' | 'slow'; ticks: number; power: number };
+export type Fighter = Unit & Stats & { side: 0 | 1; x: number; y: number; maxHp: number; energy: number; cooldown: number; shield: number; statuses: Status[]; damage: number; casts: number; hit: number; focusUsed: boolean; revived: boolean };
+export type BattleEvent = { kind: 'attack' | 'ultimate' | 'heal' | 'defeat' | 'move'; source: string; target?: string; value?: number; label?: string };
+export type Frame = { tick: number; fighters: Fighter[]; events: BattleEvent[] };
+export type CombatResult = { winner: 0 | 1 | 'draw'; frames: Frame[]; survivors: number; seed: number; enemyName: string };
+export type Team = { units: Unit[]; trainer: string; empowered: boolean; trainerTarget?: string; wishes: string[] };
