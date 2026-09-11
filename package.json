@@ -9,7 +9,11 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "tsx --test tests/*.test.ts",
     "server": "tsx server/index.ts",
-    "check": "npm test && npm run build"
+    "check": "npm test && npm run build",
+    "test:browser": "playwright test",
+    "format": "prettier --write src server tests scripts *.ts *.json *.html",
+    "format:check": "prettier --check src server tests scripts *.ts *.json *.html",
+    "sprites": "tsx scripts/fetch-sprites.ts"
   },
   "dependencies": {
     "lucide-react": "^1.44.0",
@@ -24,8 +28,12 @@
     "@types/react-dom": "^19.3.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.1.1",
+    "prettier": "^3.9.6",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

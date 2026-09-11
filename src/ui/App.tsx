@@ -1,91 +1,1542 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowRight, BookOpen, Check, ChevronRight, Coins, Crown, Heart, Hexagon, LockKeyhole, Orbit, Play, Plus, RefreshCw, Shield, Sparkles, Star, Swords, Trash2, UnlockKeyhole, Users, X, Zap, Volume2, VolumeX, Backpack, RotateCcw } from 'lucide-react';
-import { FAMILIES, ITEMS, ODDS, ROSTER, RULES, TRAITS, TRAINERS, WISHES, XP, sprite, unitName } from '../game/data';
-import { advance, benchCount, boardCount, command, createGame, encounterName, enemyFor, refreshCost, sellValue, settle, team, validSave } from '../game/engine';
+import {
+  ArrowRight,
+  BookOpen,
+  Check,
+  ChevronRight,
+  Coins,
+  Crown,
+  Heart,
+  Hexagon,
+  LockKeyhole,
+  Orbit,
+  Play,
+  Plus,
+  RefreshCw,
+  Shield,
+  Sparkles,
+  Star,
+  Swords,
+  Trash2,
+  UnlockKeyhole,
+  Users,
+  X,
+  Zap,
+  Volume2,
+  VolumeX,
+  Backpack,
+  RotateCcw,
+} from 'lucide-react';
+import {
+  FAMILIES,
+  ITEMS,
+  ODDS,
+  ROSTER,
+  RULES,
+  TRAITS,
+  TRAINERS,
+  WISHES,
+  XP,
+  sprite,
+  unitName,
+} from '../game/data';
+import {
+  advance,
+  benchCount,
+  boardCount,
+  command,
+  createGame,
+  encounterName,
+  enemyFor,
+  refreshCost,
+  sellValue,
+  settle,
+  team,
+  validSave,
+} from '../game/engine';
 import { battleStats, simulate, synergies } from '../game/combat';
 import type { Command, CombatResult, Fighter, Game, Unit } from '../game/types';
 import { useRoom } from './useRoom';
 
-const SAVE='checkmate.galaxy.v1';
-function readSave():Game|null {try{const g=JSON.parse(localStorage.getItem(SAVE)||'null');if(!validSave(g))return null;if(g.phase==='combat')return {...g,phase:'prep',lastResult:undefined,message:'Battle interrupted. Your preparation state has been restored.'};return g;}catch{return null;}}
-function Sprite({id,star=1,className=''}:{id:string;star?:number;className?:string}) {return <img className={`sprite ${className}`} src={sprite(id,star)} alt={unitName(id,star)} draggable={false}/>;}
-function Stars({count}:{count:number}) {return <span className="stars" aria-label={`${count} stars`}>{Array.from({length:count},(_,i)=><Star key={i} size={10} fill="currentColor"/>)}</span>;}
-function Tag({name}:{name:string}) {const trait=TRAITS.find(t=>t.id===name);return <span className="tag" style={{'--trait':trait?.color||'#b8b8cd'} as CSSProperties}>{name}</span>;}
-function Modal({title,onClose,children,wide=false,closable=true}:{title:string;onClose:()=>void;children:ReactNode;wide?:boolean;closable?:boolean}) {
- const ref=useRef<HTMLDivElement>(null);const closeRef=useRef(onClose);closeRef.current=onClose;
- useEffect(()=>{const previous=document.activeElement as HTMLElement;const first=ref.current?.querySelector<HTMLElement>('button,input,select');first?.focus();const listener=(e:KeyboardEvent)=>{if(e.key==='Escape')closeRef.current();if(e.key==='Tab'){const els=Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,[tabindex="0"]')||[]);const first=els[0],last=els.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};document.addEventListener('keydown',listener);return()=>{document.removeEventListener('keydown',listener);previous?.focus();};},[]);
- return <div className="modal-backdrop"><div className={`modal ${wide?'wide':''}`} role="dialog" aria-modal="true" aria-label={title} ref={ref}><div className="modal-heading"><h2>{title}</h2>{closable&&<button className="icon-button" aria-label={`Close ${title}`} onClick={onClose}><X size={20}/></button>}</div>{children}</div></div>;
+const SAVE = 'checkmate.galaxy.v1';
+function readSave(): Game | null {
+  try {
+    const g = JSON.parse(localStorage.getItem(SAVE) || 'null');
+    if (!validSave(g)) return null;
+    if (g.phase === 'combat')
+      return {
+        ...g,
+        phase: 'prep',
+        lastResult: undefined,
+        message: 'Battle interrupted. Your preparation state has been restored.',
+      };
+    return g;
+  } catch {
+    return null;
+  }
 }
-function sound(kind='tap') {try{const ctx=new AudioContext(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.type='sine';osc.frequency.setValueAtTime(kind==='battle'?220:640,ctx.currentTime);osc.frequency.exponentialRampToValueAtTime(kind==='battle'?440:320,ctx.currentTime+0.12);gain.gain.setValueAtTime(0.035,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.15);osc.start();osc.stop(ctx.currentTime+0.16);osc.onended=()=>void ctx.close();}catch{/* Audio is optional. */}}
+function Sprite({
+  id,
+  star = 1,
+  className = '',
+}: {
+  id: string;
+  star?: number;
+  className?: string;
+}) {
+  return (
+    <img
+      className={`sprite ${className}`}
+      src={sprite(id, star)}
+      alt={unitName(id, star)}
+      draggable={false}
+    />
+  );
+}
+function Stars({ count }: { count: number }) {
+  return (
+    <span className="stars" aria-label={`${count} stars`}>
+      {Array.from({ length: count }, (_, i) => (
+        <Star key={i} size={10} fill="currentColor" />
+      ))}
+    </span>
+  );
+}
+function Tag({ name }: { name: string }) {
+  const trait = TRAITS.find((t) => t.id === name);
+  return (
+    <span className="tag" style={{ '--trait': trait?.color || '#b8b8cd' } as CSSProperties}>
+      {name}
+    </span>
+  );
+}
+function Modal({
+  title,
+  onClose,
+  children,
+  wide = false,
+  closable = true,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+  closable?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement;
+    const first = ref.current?.querySelector<HTMLElement>('button,input,select');
+    first?.focus();
+    const listener = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeRef.current();
+      if (e.key === 'Tab') {
+        const els = Array.from(
+          ref.current?.querySelectorAll<HTMLElement>(
+            'button:not(:disabled),input,select,[tabindex="0"]',
+          ) || [],
+        );
+        const first = els[0],
+          last = els.at(-1);
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', listener);
+    return () => {
+      document.removeEventListener('keydown', listener);
+      previous?.focus();
+    };
+  }, []);
+  return (
+    <div className="modal-backdrop">
+      <div
+        className={`modal ${wide ? 'wide' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        ref={ref}
+      >
+        <div className="modal-heading">
+          <h2>{title}</h2>
+          {closable && (
+            <button className="icon-button" aria-label={`Close ${title}`} onClick={onClose}>
+              <X size={20} />
+            </button>
+          )}
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function sound(kind = 'tap') {
+  try {
+    const ctx = new AudioContext(),
+      osc = ctx.createOscillator(),
+      gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(kind === 'battle' ? 220 : 640, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(
+      kind === 'battle' ? 440 : 320,
+      ctx.currentTime + 0.12,
+    );
+    gain.gain.setValueAtTime(0.035, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.16);
+    osc.onended = () => void ctx.close();
+  } catch {
+    /* Audio is optional. */
+  }
+}
 
-export default function App(){
- const [saved]=useState(readSave),[local,setLocal]=useState<Game>(()=>saved||createGame(20260911));
- const [welcome,setWelcome]=useState(!saved),[trainer,setTrainer]=useState(saved?.trainer||'red'),[legends,setLegends]=useState(false);
- const [modal,setModal]=useState<'guide'|'dex'|'room'|'new'|null>(null),[selected,setSelected]=useState<string|null>(null),[inspected,setInspected]=useState<string|null>(null);
- const [battle,setBattle]=useState<CombatResult|null>(null),[frame,setFrame]=useState(0),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(2),[muted,setMuted]=useState(true),[saveError,setSaveError]=useState(false);
- const [clock,setClock]=useState(Date.now());
- const [standings,setStandings]=useState<{name:string;points:number;games:number;wins:number}[]|null>(null);
- const [dexSearch,setDexSearch]=useState(''),[roomName,setRoomName]=useState('Trainer'),[roomCode,setRoomCode]=useState('');
- const room=useRoom();const game=room.game||local,online=!!room.game;const currentTrainer=TRAINERS[game.trainer];
- const selectedUnit=game.units.find(u=>u.uid===selected),family=inspected?FAMILIES[inspected]:selectedUnit?FAMILIES[selectedUnit.family]:null;
- const stats=selectedUnit&&family?.id===selectedUnit.family?battleStats(selectedUnit,team(game)):family?.stats;
- const traits=synergies(game.units,game.wishes);const prep=game.phase==='prep'&&!room.ready;
- const activeBattle=online?room.battle:battle;const shown=activeBattle?.frames[Math.min(frame,activeBattle.frames.length-1)];
- const enemy=online?(room.opponent?.units||[]):enemyFor(game).units;
- const name=online?(room.opponent?.name||'Waiting for opponent'):encounterName(game.round);
- const closeModal=()=>setModal(null);
- useEffect(()=>{if(!online)return;const timer=setInterval(()=>setClock(Date.now()),1000);return()=>clearInterval(timer);},[online]);
- useEffect(()=>{if(online)return;try{localStorage.setItem(SAVE,JSON.stringify(local));setSaveError(false);}catch{setSaveError(true);}},[local,online]);
- useEffect(()=>{if(!playing||!activeBattle)return;const timer=setInterval(()=>setFrame(old=>Math.min(old+1,activeBattle.frames.length-1)),125/speed);return()=>clearInterval(timer);},[playing,activeBattle,speed]);
- useEffect(()=>{if(playing&&activeBattle&&frame>=activeBattle.frames.length-1){setPlaying(false);if(!online)setLocal(g=>settle(g,activeBattle));}},[frame,activeBattle,playing,online]);
- useEffect(()=>{if(room.battle){setFrame(0);setPlaying(true);}},[room.battle]);
- useEffect(()=>{if(online&&game.phase==='prep'){setPlaying(false);setFrame(0);}},[online,game.phase,game.round]);
- function send(action:Command){if(!muted)sound();if(online)room.send(action);else setLocal(g=>command(g,action));}
- function selectUnit(unit:Unit){setInspected(null);setSelected(unit.uid);}
- function move(cell:number|null,uid=selected){if(uid&&prep)send({type:'move',uid,cell});}
- function start(){if(!boardCount(game)||!prep)return;if(online){room.readyUp();return;}if(!muted)sound('battle');const result=simulate(team(game),enemyFor(game),game.seed^game.round,name);setBattle(result);setFrame(0);setPlaying(true);setLocal(g=>({...g,phase:'combat',message:'Combat is automatic. Watch your formation come to life.'}));}
- function nextRound(){if(online){room.next();return;}setLocal(g=>advance(g));setBattle(null);setFrame(0);setSelected(null);}
- function newRun(){room.leave();setLocal(createGame(Date.now()>>>0,trainer,legends));setBattle(null);setPlaying(false);setSelected(null);setWelcome(false);setModal(null);}
- function drop(e:React.DragEvent,cell:number|null){e.preventDefault();const uid=e.dataTransfer.getData('text/plain');if(game.units.some(u=>u.uid===uid))move(cell,uid);}
- const stage=`${Math.ceil(game.round/5)}-${(game.round-1)%5+1}`;
- const inspectStar=selectedUnit&&family?.id===selectedUnit.family?selectedUnit.star:1;
- const trainerChoices=<><p className="muted">A familiar face. A different way to play.</p><div className="trainer-grid">{Object.entries(TRAINERS).map(([id,t])=><button className={`trainer-choice ${trainer===id?'chosen':''}`} key={id} onClick={()=>setTrainer(id)} style={{'--trainer':t.color} as CSSProperties}><span className="trainer-avatar">{t.name==='Cynthia'?'C':t.name[0]}</span><strong>{t.name}</strong><small>{t.region}</small><p>{t.passive}</p>{trainer===id&&<Check className="choice-check" size={18}/>}</button>)}</div><label className="checkbox"><input type="checkbox" checked={legends} onChange={e=>setLegends(e.target.checked)}/> Practice lab: unlock rare Legendaries from stage 3</label><button className="primary wide-button" onClick={newRun}>Enter the galaxy <ArrowRight size={18}/></button><p className="fine">15-round practice expedition · Progress saves on this device</p></>;
- return <div className="app-shell">
-  <header className="topbar"><a className="brand" href="#" onClick={e=>e.preventDefault()} aria-label="Pokémon Checkmate Galaxy"><span className="brand-mark"><Orbit size={30}/></span><span><small>Pokémon</small><strong>CHECKMATE<span className="brand-star">✦</span></strong><em>G A L A X Y</em></span></a><nav aria-label="Game navigation"><button className="nav-current" onClick={()=>{setModal(null);setWelcome(false);}}><Swords size={16}/> Arena</button><button onClick={()=>setModal('dex')}><BookOpen size={16}/> Pokédex</button><button onClick={()=>setModal('room')}><Users size={16}/> Play with friends</button></nav><div className="top-actions"><button className="icon-button" title="How to play" aria-label="How to play" onClick={()=>setModal('guide')}><BookOpen size={19}/></button><button className="icon-button" title={muted?'Enable sound':'Mute sound'} aria-label={muted?'Enable sound':'Mute sound'} onClick={()=>{setMuted(!muted);if(muted)sound();}}>{muted?<VolumeX size={19}/>:<Volume2 size={19}/>}</button><span className="version">Season 0 <span>•</span> V1</span></div></header>
-  <main>
-   <div className="matchbar"><div className="match-title"><span className="live-dot"/><span>{online?`Room ${room.code}`:'Practice expedition'}<small>{online?'Server-authoritative match':'The Celestial Crossing'}</small></span></div><div className="round-track">{Array.from({length:5},(_,i)=><span key={i} className={i<((game.round-1)%5)?'complete':i===((game.round-1)%5)?'current':''}>{i===4?<Crown size={13}/>:<span/>}</span>)}<strong>Stage {stage}{online&&room.deadline>0&&<small className="deadline">{Math.max(0,Math.ceil((room.deadline-clock)/1000))}s</small>}</strong></div><div className="player-health"><Heart size={19} fill="currentColor"/><strong>{game.hp}</strong><span>/ 100</span><div><i style={{width:`${game.hp}%`}}/></div></div></div>
-   <div className="game-layout">
-    <aside className="left-panel"><section className="synergy-panel"><div className="section-title"><h2>Team synergies</h2><span>{traits.filter(t=>t.tier>0).length} active</span></div><p className="panel-hint">Different partners. Shared power.</p><div className="trait-list">{traits.length?traits.map(t=><div key={t.id} className={`trait-row ${t.tier?'active':''}`} title={`${t.description}. Applies to allies with this trait.`}><span className="trait-icon" style={{color:t.color}}><Hexagon size={22}/><i>{t.id[0]}</i></span><span className="trait-info"><strong>{t.id}</strong><span className="trait-pips">{t.thresholds.map(n=><i key={n} className={t.count>=n?'lit':''}>{n}</i>)}</span></span><b>{t.count}<small>/{t.thresholds.find(n=>n>t.count)||t.thresholds.at(-1)}</small></b></div>):<div className="empty-note">Deploy Pokémon to discover your synergies.</div>}</div></section>
-     {game.wishes.length>0&&<section className="wishes-panel"><h3><Sparkles size={15}/> Your Wishes</h3>{game.wishes.map(id=><div key={id} title={WISHES[id].description}>{WISHES[id].name}</div>)}</section>}
-     <section className="trainer-panel" style={{'--trainer':currentTrainer.color} as CSSProperties}><div className="trainer-identity"><span className="trainer-avatar small">{currentTrainer.name[0]}</span><div><h3>{currentTrainer.name}</h3><small>{currentTrainer.title}</small></div></div><p>{currentTrainer.passive}</p><button className={`trainer-power ${game.empowered?'armed':''}`} disabled={!prep||game.charge<3||game.empowered} onClick={()=>send({type:'power',uid:selected||undefined})} title={currentTrainer.power}><Zap size={15}/><span>{game.empowered?'Power ready':'Trainer power'}</span><b>{game.charge}/3</b></button><small className="power-detail">{currentTrainer.power}</small></section>
-    </aside>
-    <section className="arena-column" aria-label="Battle arena"><div className="arena-heading"><div><span className={`phase-badge ${game.phase}`}><span/>{playing?'Combat':room.ready?'Ready':game.phase==='prep'?'Preparation':game.phase==='result'?'Round complete':game.phase==='reward'?'Cosmic reward':game.phase==='finished'?'Expedition complete':'Combat'}</span><h1>{game.phase==='prep'?'Make your next move.':playing?'Let the stars collide.':game.phase==='result'?game.message.split('.')[0]:game.phase==='reward'?'A wish among the stars.':'Every journey leaves a constellation.'}</h1></div><div className="team-cap"><Users size={18}/><strong>{boardCount(game)}<span> / {game.level}</span></strong><small>deployed</small></div></div>
-     <div className="board-surround"><div className="orbital-ring ring-one"/><div className="orbital-ring ring-two"/><div className="opponent-strip"><span className="opponent-avatar"><Swords size={15}/></span><div><strong>{activeBattle?.enemyName||name}</strong><small>{online?'Opponent':'PvE encounter'} · {enemy.length} Pokémon</small></div>{activeBattle&&<button className="speed-button" onClick={()=>setSpeed(s=>s===4?1:s*2)} aria-label={`Battle speed ${speed}x`}>{speed}×</button>}</div>
-      <div className="board" role="group" aria-label="7 by 6 battle board. Your half is rows 4 through 6.">
-       {Array.from({length:42},(_,cell)=>{const x=cell%7,y=Math.floor(cell/7),unit=game.units.find(u=>u.cell===cell);return <button key={cell} className={`tile ${y<3?'enemy-tile':'ally-tile'} ${selected&&prep&&y>=3?'placeable':''} ${unit?.uid===selected?'selected':''}`} aria-label={`Row ${y+1}, column ${x+1}${unit?`, ${unitName(unit.family,unit.star)}`:''}`} onDragOver={e=>e.preventDefault()} onDrop={e=>drop(e,cell)} onClick={()=>{if(selected&&prep&&y>=3&&unit?.uid!==selected)move(cell);else if(unit)selectUnit(unit);}}><span className="tile-coordinate">{String.fromCharCode(65+x)}{6-y}</span></button>;})}
-       {shown&&(game.phase==='combat'||game.phase==='result'||playing)?shown.fighters.map(f=><BattleUnit key={f.uid} fighter={f} event={shown.events.find(e=>e.source===f.uid&&e.kind==='ultimate')?.label} onClick={()=>{setInspected(f.family);setSelected(null);}}/>):<>{enemy.map(u=>{const cell=u.cell!;return <div key={`enemy-${u.uid}`} className="board-piece enemy-piece preview-piece" style={{left:`${(6-cell%7)*100/7}%`,top:`${(5-Math.floor(cell/7))*100/6}%`}}><button aria-label={`Inspect enemy ${unitName(u.family,u.star)}`} onClick={()=>{setInspected(u.family);setSelected(null);}}><Stars count={u.star}/><Sprite id={u.family} star={u.star}/><span className="unit-health enemy-health"><i/></span></button></div>;})}{game.units.filter(u=>u.cell!==null).map(u=><div key={u.uid} className={`board-piece allied-piece ${selected===u.uid?'picked':''}`} style={{left:`${u.cell!%7*100/7}%`,top:`${Math.floor(u.cell!/7)*100/6}%`}} draggable={prep} onDragStart={e=>{e.dataTransfer.setData('text/plain',u.uid);selectUnit(u);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData('text/plain');move(u.cell,id);}}><button onClick={()=>{if(selected&&selected!==u.uid&&prep)move(u.cell);else selectUnit(u);}} aria-label={`Select ${unitName(u.family,u.star)}, ${u.star} stars`}><Stars count={u.star}/><Sprite id={u.family} star={u.star}/><span className="unit-health"><i/></span>{u.item&&<span className="item-dot" title={ITEMS[u.item].name}><Shield size={9}/></span>}</button></div>)}</>}
-       <span className="board-divider"/>
-      </div><div className="board-caption"><span><Shield size={12}/> Your formation</span><span>{playing?`${((shown?.tick||0)*0.25).toFixed(1)}s / 60s`:selected?'Choose a tile to move · Click another unit to swap':'Click a Pokémon, then a tile to position it'}</span></div>
-     </div>
-     <div className="bench-heading"><h3>Bench <span>{benchCount(game)} / 9</span></h3><span>Your next evolution starts here.</span></div><div className="bench" aria-label="Reserve bench" onDragOver={e=>e.preventDefault()} onDrop={e=>drop(e,null)}>{Array.from({length:9},(_,i)=>{const u=game.units.filter(u=>u.cell===null)[i];return <button key={i} className={`bench-slot ${u?.uid===selected?'selected':''}`} aria-label={u?`Select bench ${unitName(u.family,u.star)}, ${u.star} stars`:`Empty bench slot ${i+1}`} draggable={!!u&&prep} onDragStart={e=>{if(u){e.dataTransfer.setData('text/plain',u.uid);selectUnit(u);}}} onDragOver={e=>e.preventDefault()} onDrop={e=>{if(u&&game.units.find(x=>x.uid===e.dataTransfer.getData('text/plain'))?.family==='ditto'){e.preventDefault();e.stopPropagation();send({type:'ditto',uid:e.dataTransfer.getData('text/plain'),target:u.uid});}}} onClick={()=>u?selectUnit(u):move(null)}>{u?<><Stars count={u.star}/><Sprite id={u.family} star={u.star}/>{u.item&&<span className="bench-item">◆</span>}</>:<Plus size={14}/>}</button>;})}</div>
-     <div className="arena-footer"><p className="status-message" role="status" aria-live="polite">{room.error||game.message}</p>{game.phase==='prep'?<button className="primary battle-button" disabled={!boardCount(game)||room.ready} onClick={start}>{room.ready?<Check size={18}/>:<Swords size={18}/>} {room.ready?'Waiting for trainers':online?'Ready for battle':'Enter the rift'}<ChevronRight size={17}/></button>:game.phase==='result'&&!playing?<button className="primary battle-button" onClick={nextRound}>{online?'Ready for next round':'Continue'}<ArrowRight size={18}/></button>:playing?<span className="combat-label"><Orbit size={18}/> Battle in progress</span>:null}</div>
-    </section>
-    <aside className="right-panel"><section className="inspector"><div className="section-title"><h2>{family?'Pokémon details':'Field notes'}</h2>{family&&<button className="tiny-button" aria-label="Clear selection" onClick={()=>{setSelected(null);setInspected(null);}}><X size={15}/></button>}</div>{family?<><div className="inspect-art"><span className="inspect-orbit"/><Sprite id={family.id} star={inspectStar}/><Stars count={inspectStar}/></div><div className="inspect-name"><h2>{unitName(family.id,inspectStar)}</h2><span><Coins size={15}/>{family.cost}</span></div><div className="tags">{family.traits.map(t=><Tag key={t} name={t}/>)}</div><div className="stat-grid">{[['HP',Math.round(stats!.hp)],['Attack',Math.round(stats!.attack)],['Defense',stats!.defense],['Sp. Atk',Math.round(stats!.special)],['Sp. Def',stats!.resistance],['Range',stats!.range]].map(([label,value])=><div key={label}><small>{label}</small><strong>{value}</strong></div>)}</div><div className="move-details"><span><Zap size={14}/> {family.move}</span><p>{family.utility?'Transform into one 1-star copy of a non-Legendary bench Pokémon.':`${family.effect[0].toUpperCase()+family.effect.slice(1)} · ${family.power}× ${family.role==='Speedster'||family.role==='All-Rounder'?'Attack':'Sp. Attack'}. Casts automatically at ${family.stats.maxEnergy} energy.`}</p></div>{selectedUnit&&<div className="unit-actions">{selectedUnit.item&&<button disabled={!prep} onClick={()=>send({type:'unequip',uid:selectedUnit.uid})}><Shield size={14}/>{ITEMS[selectedUnit.item].name}<X size={12}/></button>}{family.utility?<label className="transform-label">Transform into<select aria-label="Ditto transformation target" defaultValue="" disabled={!prep} onChange={e=>{if(e.target.value)send({type:'ditto',uid:selectedUnit.uid,target:e.target.value});}}><option value="">Choose bench partner</option>{game.units.filter(u=>u.cell===null&&!FAMILIES[u.family].legendary&&!FAMILIES[u.family].utility).map(u=><option key={u.uid} value={u.uid}>{unitName(u.family,u.star)}</option>)}</select></label>:selectedUnit.cell!==null&&<button disabled={!prep} onClick={()=>move(null)}><RotateCcw size={14}/> Return to bench</button>}<button className="sell-button" disabled={!prep} onClick={()=>{send({type:'sell',uid:selectedUnit.uid});setSelected(null);}}><Trash2 size={14}/> Sell Pokémon <span>{sellValue(selectedUnit)} <Coins size={12}/></span></button></div>}</>:<div className="field-notes"><div className="notes-symbol"><Orbit size={48}/></div><h3>A little planning.<br/>A stellar team.</h3><p>Keep your Defenders up front and your ranged partners behind them.</p><div className="note"><Stars count={3}/><p>3 matching copies evolve.<br/>9 copies reach 3 stars.</p></div><div className="note"><Coins size={19}/><p>Every 10 saved gold earns 1 extra gold each round.</p></div><button className="text-button" onClick={()=>setModal('guide')}>Explore the field guide <ArrowRight size={14}/></button></div>}</section>
-     <section className="bag"><div className="section-title"><h3><Backpack size={15}/> Held items</h3><span>{game.inventory.length}</span></div>{game.inventory.length?<><p className="panel-hint">Select a partner, then equip an item.</p><div className="bag-items">{game.inventory.map((id,i)=><button key={`${id}-${i}`} disabled={!prep||!selectedUnit||!!FAMILIES[selectedUnit.family].utility} title={ITEMS[id].description} onClick={()=>selected&&send({type:'equip',uid:selected,item:id})}><Shield size={15}/><span>{ITEMS[id].name}</span><Plus size={12}/></button>)}</div></>:<p className="panel-hint">Find held items in cosmic rewards.</p>}</section>
-     {online&&<section className="room-players"><h3>Trainers in orbit</h3>{room.players.map(p=><div key={p.id}><span>{p.name}{p.ready?' ✓':''}{!p.connected?' (offline)':''}</span><b>{p.hp} HP</b></div>)}</section>}
-    </aside>
-   </div>
-   <section className="shop-section" aria-label="Pokémon shop"><div className="shop-toolbar"><div className="shop-title"><Orbit size={21}/><div><h2>Wormhole market</h2><p>A new possibility in every signal.</p></div></div><div className="economy"><div className="gold"><Coins size={22}/><strong>{game.gold}</strong><small>gold</small></div><div className="income"><small>Next interest</small><strong>+{Math.min(game.wishes.includes('interest')?7:5,Math.floor(game.gold/10))} <Coins size={12}/></strong></div></div><div className="shop-controls"><button className={game.locked?'locked':''} disabled={!prep} onClick={()=>send({type:'lock'})} aria-label={game.locked?'Unlock shop':'Lock shop'}>{game.locked?<LockKeyhole size={17}/>:<UnlockKeyhole size={17}/>}</button><button disabled={!prep||game.gold<refreshCost(game)} onClick={()=>send({type:'refresh'})}><RefreshCw size={16}/> Refresh <span>{refreshCost(game)} <Coins size={12}/></span></button><button disabled={!prep||game.gold<4||game.level>=9} onClick={()=>send({type:'xp'})}><Plus size={17}/> Buy XP <span>4 <Coins size={12}/></span></button></div></div>
-    <div className="shop-content"><div className="level-panel"><div><span>Level</span><strong>{game.level}</strong></div><div className="xp-bar"><i style={{width:`${Math.min(100,game.xp/XP[game.level]*100)}%`}}/></div><small>{game.level===9?'Maximum level':`${game.xp} / ${XP[game.level]} XP`}</small><div className="odds" title="Base tier odds. Locked tiers are removed and remaining odds renormalized.">{ODDS[game.level].map((v,i)=><span key={i} className={`tier-${i+1}`}>{v}%</span>)}</div></div><div className="shop-cards">{game.shop.map((id,i)=>{const f=id?FAMILIES[id]:null;return f?<div key={`${i}-${id}`} className={`shop-card tier-${f.cost}`}><button className="buy-card" disabled={!prep||game.gold<f.cost} onClick={()=>send({type:'buy',slot:i})} aria-label={`Buy ${f.names[0]} for ${f.cost} gold`}><span className="shop-role">{f.role}</span><Sprite id={f.id}/><span className="shop-card-name"><strong>{f.names[0]}</strong><b><Coins size={13}/>{f.cost}</b></span><span className="shop-types">{f.traits.filter(t=>t!==f.role).join(' / ')}</span><span className="owned-count">{game.units.filter(u=>u.family===f.id).length?`${game.units.filter(u=>u.family===f.id).length} in your team`:'Recruit partner'}</span></button><button className="inspect-shop" aria-label={`Inspect ${f.names[0]}`} onClick={()=>{setInspected(f.id);setSelected(null);}}><Plus size={13}/></button></div>:<div className="shop-card sold-card" key={i}><Check size={21}/><span>Recruited</span><small>Good things take a little space.</small></div>;})}</div></div>
-   </section>
-   <footer className="bottom-bar"><span><span className="save-dot"/>{online?'Connected to room server':saveError?'Device save unavailable':'Progress saved on this device'}</span><span>Unofficial fan project · Pokémon belongs to its respective owners</span><button onClick={()=>{setTrainer(game.trainer);setModal('new');}}>New expedition</button></footer>
-  </main>
-  {(welcome||modal==='new')&&<Modal title={welcome?'Your next adventure is written in the stars.':'Begin a new expedition'} wide onClose={()=>{setWelcome(false);setModal(null);}}><div className="welcome-brand"><Orbit size={42}/><span>Pokémon Checkmate <small>Galaxy · Season 0</small></span></div>{modal==='new'&&<p className="muted">Starting replaces your current practice expedition.</p>}{trainerChoices}</Modal>}
-  {modal==='guide'&&<Modal title="The field guide" onClose={closeModal} wide><div className="guide-grid">{[['Draft your partners','Buy Pokémon from the five-slot shop. Your first three are deployed automatically. Refresh costs 2 gold; locking keeps the remaining offers for next round.'],['Make room for a carry','Click a Pokémon, then a lower-half tile to move. Occupied tiles swap units. Empty bench slots return a selected unit to reserve. Dragging works too.'],['Evolve together','Three equal-star copies merge automatically, anywhere in your roster. Three 2-stars make a 3-star. Legendaries need two copies per upgrade. Ditto copies a non-Legendary bench partner.'],['Find your constellation','Unique deployed families count toward synergies. Bonuses apply to Pokémon carrying that trait. Duplicate families do not add extra synergy counts.'],['Build your economy','Each round: 5 base gold, 1 per 10 saved (cap 5), streak income, and 1 extra for victory. Four gold buys 4 XP. Level is your team-size limit.'],['Trust your team','Combat is automatic: approach, attack, gain energy, cast. Physical damage uses Defense; special uses Sp. Defense. All Pokémon recover for the next round.'],['Wish upon a star','Every third round, pick one cosmic reward. Held items help one partner; Wishes reshape your run. Trainer powers charge after battles and are used in preparation.'],['Across the galaxy','Practice ends after 15 rounds or at 0 HP. Stage 2 opens 4-cost units. Stage 3 can offer unlocked 5-cost Legendaries at level 7+. Friend rooms support 2–8 trainers on a local server.']].map(([title,description],i)=><div key={title}><span className="guide-number">0{i+1}</span><h3>{title}</h3><p>{description}</p></div>)}</div><p className="fine">Balance is provisional. This is an auto-battler, with Checkmate-specific stats and family traits.</p></Modal>}
-  {modal==='dex'&&<Modal title="The constellation Pokédex" onClose={closeModal} wide><label className="search-label">Find a partner<input autoComplete="off" value={dexSearch} onChange={e=>setDexSearch(e.target.value)} placeholder="Name, type or role…"/></label><div className="dex-grid">{ROSTER.filter(f=>[...f.names,...f.traits].join(' ').toLowerCase().includes(dexSearch.toLowerCase())).map(f=><button className={`dex-card tier-${f.cost}`} key={f.id} onClick={()=>{setInspected(f.id);setSelected(null);setModal(null);}}><Sprite id={f.id} star={3}/><strong>{f.names[0]}</strong><small>{f.names[2]} · {f.cost} gold</small><span>{f.role}</span></button>)}</div></Modal>}
-  {game.phase==='reward'&&<Modal title="The cosmos has something for you." onClose={()=>{}} wide closable={false}><p className="muted">Choose one reward. Carry its light into the next battle.</p><div className="reward-orbit"><Orbit size={44}/></div><div className="reward-grid">{game.rewards.map(r=><button className={`reward-card ${r.kind}`} key={r.id} onClick={()=>send({type:'reward',id:r.id})}>{r.kind==='wish'?<Sparkles size={29}/>:r.kind==='gold'?<Coins size={29}/>:r.kind==='heal'?<Heart size={29}/>:<Shield size={29}/>}<small>{r.kind==='wish'?'Team Wish':r.kind==='item'?'Held item':'Cosmic gift'}</small><h3>{r.name}</h3><p>{r.description}</p><span>Claim reward <ArrowRight size={15}/></span></button>)}</div></Modal>}
-  {game.phase==='finished'&&<Modal title={game.hp>0?'A constellation to remember.':'Every star gets another chance.'} onClose={()=>{}} closable={false}><div className="finish"><Crown size={56}/><h3>{game.hp>0?'Expedition complete':'Expedition ended'}</h3><p>{game.wins} victories · {game.losses} defeats · {game.round} rounds</p><div className="history">{game.history.map(h=><span key={h.round} className={h.outcome==='Victory'?'win':'loss'} title={`Round ${h.round}: ${h.outcome}`}>{h.round}</span>)}</div><button className="primary wide-button" onClick={()=>{if(online)room.leave();setLocal(createGame(Date.now()>>>0,trainer,legends));setBattle(null);setWelcome(true);}}>Choose your next trainer <ArrowRight size={17}/></button></div></Modal>}
-  {modal==='room'&&<Modal title="Bring your rivals into orbit." onClose={closeModal}><p className="muted">Private rooms for 2–8 trainers. Run the room server alongside the game. Scores are provisional on this server.</p><label className="search-label">Trainer name<input maxLength={20} value={roomName} onChange={e=>setRoomName(e.target.value)}/></label><div className="room-form"><button className="primary" disabled={room.connecting} onClick={()=>room.connect('create',roomName,'',trainer)}>Create room</button><label className="search-label">Room code<input maxLength={6} value={roomCode} onChange={e=>setRoomCode(e.target.value.toUpperCase())} placeholder="ABC123"/></label><button disabled={roomCode.length<4||room.connecting} onClick={()=>room.connect('join',roomName,roomCode,trainer)}>Join room <ArrowRight size={16}/></button></div>{room.code&&<div className="room-info"><strong>Room {room.code}</strong><p>Share this code with friends on the same server.</p>{room.players.map(p=><p key={p.id}>{p.name} {p.host?'· Host':''} {p.connected?'· Connected':'· Offline'}</p>)}{room.isHost&&room.status==='lobby'&&<button className="primary" disabled={room.players.length<2} onClick={()=>{room.start();setModal(null);}}>Start match</button>}{room.status!=='lobby'&&<button onClick={()=>setModal(null)}>Return to arena</button>}<button className="text-button" onClick={room.leave}>Leave room</button></div>}<button className="text-button" onClick={()=>{fetch('/api/standings').then(r=>{if(!r.ok)throw Error();return r.json();}).then(d=>setStandings(d.standings)).catch(()=>setStandings([]));}}>View provisional standings <Crown size={14}/></button>{standings&&<div className="standings"><h3>Local server standings</h3><p className="fine">Guest seats earn placement points. Account-based MMR comes later.</p>{standings.length?standings.map((s,i)=><div key={i}><span>{i+1}. {s.name}</span><strong>{s.points} pts</strong><small>{s.games} games · {s.wins} wins</small></div>):<p className="muted">No results available yet. Complete a room match with the server running.</p>}</div>}<p className="error" role="status">{room.error}</p></Modal>}
- </div>;
+export default function App() {
+  const [saved] = useState(readSave),
+    [local, setLocal] = useState<Game>(() => saved || createGame(20260911));
+  const [welcome, setWelcome] = useState(!saved),
+    [trainer, setTrainer] = useState(saved?.trainer || 'red'),
+    [legends, setLegends] = useState(false);
+  const [modal, setModal] = useState<'guide' | 'dex' | 'room' | 'new' | null>(null),
+    [selected, setSelected] = useState<string | null>(null),
+    [inspected, setInspected] = useState<string | null>(null);
+  const [battle, setBattle] = useState<CombatResult | null>(null),
+    [frame, setFrame] = useState(0),
+    [playing, setPlaying] = useState(false),
+    [speed, setSpeed] = useState(2),
+    [muted, setMuted] = useState(true),
+    [saveError, setSaveError] = useState(false);
+  const [clock, setClock] = useState(Date.now());
+  const [standings, setStandings] = useState<
+    { name: string; points: number; games: number; wins: number }[] | null
+  >(null);
+  const [dexSearch, setDexSearch] = useState(''),
+    [roomName, setRoomName] = useState('Trainer'),
+    [roomCode, setRoomCode] = useState('');
+  const room = useRoom();
+  const game = room.game || local,
+    online = !!room.game;
+  const currentTrainer = TRAINERS[game.trainer];
+  const selectedUnit = game.units.find((u) => u.uid === selected),
+    family = inspected ? FAMILIES[inspected] : selectedUnit ? FAMILIES[selectedUnit.family] : null;
+  const stats =
+    selectedUnit && family?.id === selectedUnit.family
+      ? battleStats(selectedUnit, team(game))
+      : family?.stats;
+  const traits = synergies(game.units, game.wishes);
+  const prep = game.phase === 'prep' && !room.ready;
+  const activeBattle = online ? room.battle : battle;
+  const shown = activeBattle?.frames[Math.min(frame, activeBattle.frames.length - 1)];
+  const enemy = online
+    ? room.opponent?.units.filter((u) => u.cell !== null) || []
+    : enemyFor(game).units;
+  const name = online ? room.opponent?.name || 'Waiting for opponent' : encounterName(game.round);
+  const closeModal = () => setModal(null);
+  useEffect(() => {
+    if (!online) return;
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [online]);
+  useEffect(() => {
+    if (online) return;
+    try {
+      localStorage.setItem(SAVE, JSON.stringify({ ...local, lastResult: undefined }));
+      setSaveError(false);
+    } catch {
+      setSaveError(true);
+    }
+  }, [local, online]);
+  useEffect(() => {
+    if (!playing || !activeBattle) return;
+    const timer = setInterval(
+      () => setFrame((old) => Math.min(old + 1, activeBattle.frames.length - 1)),
+      125 / speed,
+    );
+    return () => clearInterval(timer);
+  }, [playing, activeBattle, speed]);
+  useEffect(() => {
+    if (playing && activeBattle && frame >= activeBattle.frames.length - 1) {
+      setPlaying(false);
+      if (!online) setLocal((g) => settle(g, activeBattle));
+    }
+  }, [frame, activeBattle, playing, online]);
+  useEffect(() => {
+    if (room.battle) {
+      setFrame(0);
+      setPlaying(true);
+    }
+  }, [room.battle]);
+  useEffect(() => {
+    if (online && game.phase === 'prep') {
+      setPlaying(false);
+      setFrame(0);
+    }
+  }, [online, game.phase, game.round]);
+  function send(action: Command) {
+    if (!muted) sound();
+    if (online) room.send(action);
+    else setLocal((g) => command(g, action));
+  }
+  function selectUnit(unit: Unit) {
+    setInspected(null);
+    setSelected(unit.uid);
+  }
+  function move(cell: number | null, uid = selected) {
+    if (uid && prep) send({ type: 'move', uid, cell });
+  }
+  function start() {
+    if (!boardCount(game) || !prep) return;
+    if (online) {
+      room.readyUp();
+      return;
+    }
+    if (!muted) sound('battle');
+    const result = simulate(team(game), enemyFor(game), game.seed ^ game.round, name);
+    setBattle(result);
+    setFrame(0);
+    setPlaying(true);
+    setLocal((g) => ({
+      ...g,
+      phase: 'combat',
+      message: 'Combat is automatic. Watch your formation come to life.',
+    }));
+  }
+  function nextRound() {
+    if (online) {
+      room.next();
+      return;
+    }
+    setLocal((g) => advance(g));
+    setBattle(null);
+    setFrame(0);
+    setSelected(null);
+  }
+  function newRun() {
+    room.leave();
+    setLocal(createGame(Date.now() >>> 0, trainer, legends));
+    setBattle(null);
+    setPlaying(false);
+    setSelected(null);
+    setWelcome(false);
+    setModal(null);
+  }
+  function drop(e: React.DragEvent, cell: number | null) {
+    e.preventDefault();
+    const uid = e.dataTransfer.getData('text/plain');
+    if (game.units.some((u) => u.uid === uid)) move(cell, uid);
+  }
+  const stage = `${Math.ceil(game.round / 5)}-${((game.round - 1) % 5) + 1}`;
+  const inspectStar = selectedUnit && family?.id === selectedUnit.family ? selectedUnit.star : 1;
+  const trainerChoices = (
+    <>
+      <p className="muted">A familiar face. A different way to play.</p>
+      <div className="trainer-grid">
+        {Object.entries(TRAINERS).map(([id, t]) => (
+          <button
+            className={`trainer-choice ${trainer === id ? 'chosen' : ''}`}
+            key={id}
+            onClick={() => setTrainer(id)}
+            style={{ '--trainer': t.color } as CSSProperties}
+          >
+            <span className="trainer-avatar">{t.name === 'Cynthia' ? 'C' : t.name[0]}</span>
+            <strong>{t.name}</strong>
+            <small>{t.region}</small>
+            <p>{t.passive}</p>
+            {trainer === id && <Check className="choice-check" size={18} />}
+          </button>
+        ))}
+      </div>
+      <label className="checkbox">
+        <input type="checkbox" checked={legends} onChange={(e) => setLegends(e.target.checked)} />{' '}
+        Practice lab: unlock rare Legendaries from stage 3
+      </label>
+      <button className="primary wide-button" onClick={newRun}>
+        Enter the galaxy <ArrowRight size={18} />
+      </button>
+      <p className="fine">15-round practice expedition · Progress saves on this device</p>
+    </>
+  );
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <a
+          className="brand"
+          href="#"
+          onClick={(e) => e.preventDefault()}
+          aria-label="Pokémon Checkmate Galaxy"
+        >
+          <span className="brand-mark">
+            <Orbit size={30} />
+          </span>
+          <span>
+            <small>Pokémon</small>
+            <strong>
+              CHECKMATE<span className="brand-star">✦</span>
+            </strong>
+            <em>G A L A X Y</em>
+          </span>
+        </a>
+        <nav aria-label="Game navigation">
+          <button
+            className="nav-current"
+            onClick={() => {
+              setModal(null);
+              setWelcome(false);
+            }}
+          >
+            <Swords size={16} /> Arena
+          </button>
+          <button onClick={() => setModal('dex')}>
+            <BookOpen size={16} /> Pokédex
+          </button>
+          <button onClick={() => setModal('room')}>
+            <Users size={16} /> Play with friends
+          </button>
+        </nav>
+        <div className="top-actions">
+          <button
+            className="icon-button"
+            title="How to play"
+            aria-label="How to play"
+            onClick={() => setModal('guide')}
+          >
+            <BookOpen size={19} />
+          </button>
+          <button
+            className="icon-button"
+            title={muted ? 'Enable sound' : 'Mute sound'}
+            aria-label={muted ? 'Enable sound' : 'Mute sound'}
+            onClick={() => {
+              setMuted(!muted);
+              if (muted) sound();
+            }}
+          >
+            {muted ? <VolumeX size={19} /> : <Volume2 size={19} />}
+          </button>
+          <span className="version">
+            Season 0 <span>•</span> V1
+          </span>
+        </div>
+      </header>
+      <main>
+        <div className="matchbar">
+          <div className="match-title">
+            <span className="live-dot" />
+            <span>
+              {online ? `Room ${room.code}` : 'Practice expedition'}
+              <small>{online ? 'Server-authoritative match' : 'The Celestial Crossing'}</small>
+            </span>
+          </div>
+          <div className="round-track">
+            {Array.from({ length: 5 }, (_, i) => (
+              <span
+                key={i}
+                className={
+                  i < (game.round - 1) % 5
+                    ? 'complete'
+                    : i === (game.round - 1) % 5
+                      ? 'current'
+                      : ''
+                }
+              >
+                {i === 4 ? <Crown size={13} /> : <span />}
+              </span>
+            ))}
+            <strong>
+              Stage {stage}
+              {online && room.deadline > 0 && (
+                <small className="deadline">
+                  {Math.max(0, Math.ceil((room.deadline - clock) / 1000))}s
+                </small>
+              )}
+            </strong>
+          </div>
+          <div className="player-health">
+            <Heart size={19} fill="currentColor" />
+            <strong>{game.hp}</strong>
+            <span>/ 100</span>
+            <div>
+              <i style={{ width: `${game.hp}%` }} />
+            </div>
+          </div>
+        </div>
+        <div className="game-layout">
+          <aside className="left-panel">
+            <section className="synergy-panel">
+              <div className="section-title">
+                <h2>Team synergies</h2>
+                <span>{traits.filter((t) => t.tier > 0).length} active</span>
+              </div>
+              <p className="panel-hint">Different partners. Shared power.</p>
+              <div className="trait-list">
+                {traits.length ? (
+                  traits.map((t) => (
+                    <div
+                      key={t.id}
+                      className={`trait-row ${t.tier ? 'active' : ''}`}
+                      title={`${t.description}. Applies to allies with this trait.`}
+                    >
+                      <span className="trait-icon" style={{ color: t.color }}>
+                        <Hexagon size={22} />
+                        <i>{t.id[0]}</i>
+                      </span>
+                      <span className="trait-info">
+                        <strong>{t.id}</strong>
+                        <span className="trait-pips">
+                          {t.thresholds.map((n) => (
+                            <i key={n} className={t.count >= n ? 'lit' : ''}>
+                              {n}
+                            </i>
+                          ))}
+                        </span>
+                      </span>
+                      <b>
+                        {t.count}
+                        <small>
+                          /{t.thresholds.find((n) => n > t.count) || t.thresholds.at(-1)}
+                        </small>
+                      </b>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-note">Deploy Pokémon to discover your synergies.</div>
+                )}
+              </div>
+            </section>
+            {game.wishes.length > 0 && (
+              <section className="wishes-panel">
+                <h3>
+                  <Sparkles size={15} /> Your Wishes
+                </h3>
+                {game.wishes.map((id) => (
+                  <div key={id} title={WISHES[id].description}>
+                    {WISHES[id].name}
+                  </div>
+                ))}
+              </section>
+            )}
+            <section
+              className="trainer-panel"
+              style={{ '--trainer': currentTrainer.color } as CSSProperties}
+            >
+              <div className="trainer-identity">
+                <span className="trainer-avatar small">{currentTrainer.name[0]}</span>
+                <div>
+                  <h3>{currentTrainer.name}</h3>
+                  <small>{currentTrainer.title}</small>
+                </div>
+              </div>
+              <p>{currentTrainer.passive}</p>
+              <button
+                className={`trainer-power ${game.empowered ? 'armed' : ''}`}
+                disabled={!prep || game.charge < 3 || game.empowered}
+                onClick={() => send({ type: 'power', uid: selected || undefined })}
+                title={currentTrainer.power}
+              >
+                <Zap size={15} />
+                <span>{game.empowered ? 'Power ready' : 'Trainer power'}</span>
+                <b>{game.charge}/3</b>
+              </button>
+              <small className="power-detail">{currentTrainer.power}</small>
+            </section>
+          </aside>
+          <section className="arena-column" aria-label="Battle arena">
+            <div className="arena-heading">
+              <div>
+                <span className={`phase-badge ${game.phase}`}>
+                  <span />
+                  {playing
+                    ? 'Combat'
+                    : room.ready
+                      ? 'Ready'
+                      : game.phase === 'prep'
+                        ? 'Preparation'
+                        : game.phase === 'result'
+                          ? 'Round complete'
+                          : game.phase === 'reward'
+                            ? 'Cosmic reward'
+                            : game.phase === 'finished'
+                              ? 'Expedition complete'
+                              : 'Combat'}
+                </span>
+                <h1>
+                  {game.phase === 'prep'
+                    ? 'Make your next move.'
+                    : playing
+                      ? 'Let the stars collide.'
+                      : game.phase === 'result'
+                        ? game.message.split('.')[0]
+                        : game.phase === 'reward'
+                          ? 'A wish among the stars.'
+                          : 'Every journey leaves a constellation.'}
+                </h1>
+              </div>
+              <div className="team-cap">
+                <Users size={18} />
+                <strong>
+                  {boardCount(game)}
+                  <span> / {game.level}</span>
+                </strong>
+                <small>deployed</small>
+              </div>
+            </div>
+            <div className="board-surround">
+              <div className="orbital-ring ring-one" />
+              <div className="orbital-ring ring-two" />
+              <div className="opponent-strip">
+                <span className="opponent-avatar">
+                  <Swords size={15} />
+                </span>
+                <div>
+                  <strong>{activeBattle?.enemyName || name}</strong>
+                  <small>
+                    {online ? 'Opponent' : 'PvE encounter'} · {enemy.length} Pokémon
+                  </small>
+                </div>
+                {activeBattle && (
+                  <button
+                    className="speed-button"
+                    onClick={() => setSpeed((s) => (s === 4 ? 1 : s * 2))}
+                    aria-label={`Battle speed ${speed}x`}
+                  >
+                    {speed}×
+                  </button>
+                )}
+              </div>
+              <div
+                className="board"
+                role="group"
+                aria-label="7 by 6 battle board. Your half is rows 4 through 6."
+              >
+                {Array.from({ length: 42 }, (_, cell) => {
+                  const x = cell % 7,
+                    y = Math.floor(cell / 7),
+                    unit = game.units.find((u) => u.cell === cell);
+                  return (
+                    <button
+                      key={cell}
+                      className={`tile ${y < 3 ? 'enemy-tile' : 'ally-tile'} ${selected && prep && y >= 3 ? 'placeable' : ''} ${unit?.uid === selected ? 'selected' : ''}`}
+                      aria-label={`Row ${y + 1}, column ${x + 1}${unit ? `, ${unitName(unit.family, unit.star)}` : ''}`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => drop(e, cell)}
+                      onClick={() => {
+                        if (selected && prep && y >= 3 && unit?.uid !== selected) move(cell);
+                        else if (unit) selectUnit(unit);
+                      }}
+                    >
+                      <span className="tile-coordinate">
+                        {String.fromCharCode(65 + x)}
+                        {6 - y}
+                      </span>
+                    </button>
+                  );
+                })}
+                {shown && (game.phase === 'combat' || game.phase === 'result' || playing) ? (
+                  shown.fighters.map((f) => (
+                    <BattleUnit
+                      key={f.uid}
+                      fighter={f}
+                      event={
+                        shown.events.find((e) => e.source === f.uid && e.kind === 'ultimate')?.label
+                      }
+                      onClick={() => {
+                        setInspected(f.family);
+                        setSelected(null);
+                      }}
+                    />
+                  ))
+                ) : (
+                  <>
+                    {enemy.map((u) => {
+                      const cell = u.cell!;
+                      return (
+                        <div
+                          key={`enemy-${u.uid}`}
+                          className="board-piece enemy-piece preview-piece"
+                          style={{
+                            left: `${((6 - (cell % 7)) * 100) / 7}%`,
+                            top: `${((5 - Math.floor(cell / 7)) * 100) / 6}%`,
+                          }}
+                        >
+                          <button
+                            aria-label={`Inspect enemy ${unitName(u.family, u.star)}`}
+                            onClick={() => {
+                              setInspected(u.family);
+                              setSelected(null);
+                            }}
+                          >
+                            <Stars count={u.star} />
+                            <Sprite id={u.family} star={u.star} />
+                            <span className="unit-health enemy-health">
+                              <i />
+                            </span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {game.units
+                      .filter((u) => u.cell !== null)
+                      .map((u) => (
+                        <div
+                          key={u.uid}
+                          className={`board-piece allied-piece ${selected === u.uid ? 'picked' : ''}`}
+                          style={{
+                            left: `${((u.cell! % 7) * 100) / 7}%`,
+                            top: `${(Math.floor(u.cell! / 7) * 100) / 6}%`,
+                          }}
+                          draggable={prep}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', u.uid);
+                            selectUnit(u);
+                          }}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const id = e.dataTransfer.getData('text/plain');
+                            move(u.cell, id);
+                          }}
+                        >
+                          <button
+                            onClick={() => {
+                              if (selected && selected !== u.uid && prep) move(u.cell);
+                              else selectUnit(u);
+                            }}
+                            aria-label={`Select ${unitName(u.family, u.star)}, ${u.star} stars`}
+                          >
+                            <Stars count={u.star} />
+                            <Sprite id={u.family} star={u.star} />
+                            <span className="unit-health">
+                              <i />
+                            </span>
+                            {u.item && (
+                              <span className="item-dot" title={ITEMS[u.item].name}>
+                                <Shield size={9} />
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                  </>
+                )}
+                {shown && (game.phase === 'combat' || game.phase === 'result' || playing) && (
+                  <svg
+                    className="battle-effects"
+                    viewBox="0 0 700 600"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    {shown.events
+                      .filter((e) => (e.kind === 'attack' || e.kind === 'ultimate') && e.target)
+                      .map((e, i) => {
+                        const from = shown.fighters.find((f) => f.uid === e.source),
+                          to = shown.fighters.find((f) => f.uid === e.target);
+                        return from && to ? (
+                          <g key={`${shown.tick}-${i}`}>
+                            <line
+                              x1={from.x * 100 + 50}
+                              y1={from.y * 100 + 50}
+                              x2={to.x * 100 + 50}
+                              y2={to.y * 100 + 50}
+                              className={e.kind === 'ultimate' ? 'ultimate-trail' : 'attack-trail'}
+                            />
+                            <text x={to.x * 100 + 50} y={to.y * 100 + 20} textAnchor="middle">
+                              {e.value}
+                            </text>
+                          </g>
+                        ) : null;
+                      })}
+                  </svg>
+                )}
+                <span className="board-divider" />
+              </div>
+              <div className="board-caption">
+                <span>
+                  <Shield size={12} /> Your formation
+                </span>
+                <span>
+                  {playing
+                    ? `${((shown?.tick || 0) * 0.25).toFixed(1)}s / 60s`
+                    : selected
+                      ? 'Choose a tile to move · Click another unit to swap'
+                      : 'Click a Pokémon, then a tile to position it'}
+                </span>
+              </div>
+            </div>
+            <div className="bench-heading">
+              <h3>
+                Bench <span>{benchCount(game)} / 9</span>
+              </h3>
+              <span>Your next evolution starts here.</span>
+            </div>
+            <div
+              className="bench"
+              aria-label="Reserve bench"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => drop(e, null)}
+            >
+              {Array.from({ length: 9 }, (_, i) => {
+                const u = game.units.filter((u) => u.cell === null)[i];
+                return (
+                  <button
+                    key={i}
+                    className={`bench-slot ${u?.uid === selected ? 'selected' : ''}`}
+                    aria-label={
+                      u
+                        ? `Select bench ${unitName(u.family, u.star)}, ${u.star} stars`
+                        : `Empty bench slot ${i + 1}`
+                    }
+                    draggable={!!u && prep}
+                    onDragStart={(e) => {
+                      if (u) {
+                        e.dataTransfer.setData('text/plain', u.uid);
+                        selectUnit(u);
+                      }
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      if (
+                        u &&
+                        game.units.find((x) => x.uid === e.dataTransfer.getData('text/plain'))
+                          ?.family === 'ditto'
+                      ) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        send({
+                          type: 'ditto',
+                          uid: e.dataTransfer.getData('text/plain'),
+                          target: u.uid,
+                        });
+                      }
+                    }}
+                    onClick={() => (u ? selectUnit(u) : move(null))}
+                  >
+                    {u ? (
+                      <>
+                        <Stars count={u.star} />
+                        <Sprite id={u.family} star={u.star} />
+                        {u.item && <span className="bench-item">◆</span>}
+                      </>
+                    ) : (
+                      <Plus size={14} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="arena-footer">
+              <p className="status-message" role="status" aria-live="polite">
+                {room.error || game.message}
+              </p>
+              {game.phase === 'prep' ? (
+                <button
+                  className="primary battle-button"
+                  disabled={!boardCount(game) || room.ready}
+                  onClick={start}
+                >
+                  {room.ready ? <Check size={18} /> : <Swords size={18} />}{' '}
+                  {room.ready
+                    ? 'Waiting for trainers'
+                    : online
+                      ? 'Ready for battle'
+                      : 'Enter the rift'}
+                  <ChevronRight size={17} />
+                </button>
+              ) : game.phase === 'result' && !playing ? (
+                <button className="primary battle-button" onClick={nextRound}>
+                  {online ? 'Ready for next round' : 'Continue'}
+                  <ArrowRight size={18} />
+                </button>
+              ) : playing ? (
+                <span className="combat-label">
+                  <Orbit size={18} /> Battle in progress
+                </span>
+              ) : null}
+            </div>
+          </section>
+          <aside className="right-panel">
+            <section className="inspector">
+              <div className="section-title">
+                <h2>{family ? 'Pokémon details' : 'Field notes'}</h2>
+                {family && (
+                  <button
+                    className="tiny-button"
+                    aria-label="Clear selection"
+                    onClick={() => {
+                      setSelected(null);
+                      setInspected(null);
+                    }}
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+              {family ? (
+                <>
+                  <div className="inspect-art">
+                    <span className="inspect-orbit" />
+                    <Sprite id={family.id} star={inspectStar} />
+                    <Stars count={inspectStar} />
+                  </div>
+                  <div className="inspect-name">
+                    <h2>{unitName(family.id, inspectStar)}</h2>
+                    <span>
+                      <Coins size={15} />
+                      {family.cost}
+                    </span>
+                  </div>
+                  <div className="tags">
+                    {family.traits.map((t) => (
+                      <Tag key={t} name={t} />
+                    ))}
+                  </div>
+                  <div className="stat-grid">
+                    {[
+                      ['HP', Math.round(stats!.hp)],
+                      ['Attack', Math.round(stats!.attack)],
+                      ['Defense', stats!.defense],
+                      ['Sp. Atk', Math.round(stats!.special)],
+                      ['Sp. Def', stats!.resistance],
+                      ['Range', stats!.range],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <small>{label}</small>
+                        <strong>{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="move-details">
+                    <span>
+                      <Zap size={14} /> {family.move}
+                    </span>
+                    <p>
+                      {family.utility
+                        ? 'Transform into one 1-star copy of a non-Legendary bench Pokémon.'
+                        : `${family.effect[0].toUpperCase() + family.effect.slice(1)} · ${family.power}× ${family.role === 'Speedster' || family.role === 'All-Rounder' ? 'Attack' : 'Sp. Attack'}. Casts automatically at ${family.stats.maxEnergy} energy.`}
+                    </p>
+                  </div>
+                  {selectedUnit && (
+                    <div className="unit-actions">
+                      {selectedUnit.item && (
+                        <button
+                          disabled={!prep}
+                          onClick={() => send({ type: 'unequip', uid: selectedUnit.uid })}
+                        >
+                          <Shield size={14} />
+                          {ITEMS[selectedUnit.item].name}
+                          <X size={12} />
+                        </button>
+                      )}
+                      {family.utility ? (
+                        <label className="transform-label">
+                          Transform into
+                          <select
+                            aria-label="Ditto transformation target"
+                            defaultValue=""
+                            disabled={!prep}
+                            onChange={(e) => {
+                              if (e.target.value)
+                                send({
+                                  type: 'ditto',
+                                  uid: selectedUnit.uid,
+                                  target: e.target.value,
+                                });
+                            }}
+                          >
+                            <option value="">Choose bench partner</option>
+                            {game.units
+                              .filter(
+                                (u) =>
+                                  u.cell === null &&
+                                  !FAMILIES[u.family].legendary &&
+                                  !FAMILIES[u.family].utility,
+                              )
+                              .map((u) => (
+                                <option key={u.uid} value={u.uid}>
+                                  {unitName(u.family, u.star)}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                      ) : (
+                        selectedUnit.cell !== null && (
+                          <button disabled={!prep} onClick={() => move(null)}>
+                            <RotateCcw size={14} /> Return to bench
+                          </button>
+                        )
+                      )}
+                      <button
+                        className="sell-button"
+                        disabled={!prep}
+                        onClick={() => {
+                          send({ type: 'sell', uid: selectedUnit.uid });
+                          setSelected(null);
+                        }}
+                      >
+                        <Trash2 size={14} /> Sell Pokémon{' '}
+                        <span>
+                          {sellValue(selectedUnit)} <Coins size={12} />
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="field-notes">
+                  <div className="notes-symbol">
+                    <Orbit size={48} />
+                  </div>
+                  <h3>
+                    A little planning.
+                    <br />A stellar team.
+                  </h3>
+                  <p>Keep your Defenders up front and your ranged partners behind them.</p>
+                  <div className="note">
+                    <Stars count={3} />
+                    <p>
+                      3 matching copies evolve.
+                      <br />9 copies reach 3 stars.
+                    </p>
+                  </div>
+                  <div className="note">
+                    <Coins size={19} />
+                    <p>Every 10 saved gold earns 1 extra gold each round.</p>
+                  </div>
+                  <button className="text-button" onClick={() => setModal('guide')}>
+                    Explore the field guide <ArrowRight size={14} />
+                  </button>
+                </div>
+              )}
+            </section>
+            <section className="bag">
+              <div className="section-title">
+                <h3>
+                  <Backpack size={15} /> Held items
+                </h3>
+                <span>{game.inventory.length}</span>
+              </div>
+              {game.inventory.length ? (
+                <>
+                  <p className="panel-hint">Select a partner, then equip an item.</p>
+                  <div className="bag-items">
+                    {game.inventory.map((id, i) => (
+                      <button
+                        key={`${id}-${i}`}
+                        disabled={!prep || !selectedUnit || !!FAMILIES[selectedUnit.family].utility}
+                        title={ITEMS[id].description}
+                        onClick={() => selected && send({ type: 'equip', uid: selected, item: id })}
+                      >
+                        <Shield size={15} />
+                        <span>{ITEMS[id].name}</span>
+                        <Plus size={12} />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="panel-hint">Find held items in cosmic rewards.</p>
+              )}
+            </section>
+            {online && (
+              <section className="room-players">
+                <h3>Trainers in orbit</h3>
+                {room.players.map((p) => (
+                  <div key={p.id}>
+                    <span>
+                      {p.name}
+                      {p.ready ? ' ✓' : ''}
+                      {!p.connected ? ' (offline)' : ''}
+                    </span>
+                    <b>{p.hp} HP</b>
+                  </div>
+                ))}
+              </section>
+            )}
+          </aside>
+        </div>
+        <section className="shop-section" aria-label="Pokémon shop">
+          <div className="shop-toolbar">
+            <div className="shop-title">
+              <Orbit size={21} />
+              <div>
+                <h2>Wormhole market</h2>
+                <p>A new possibility in every signal.</p>
+              </div>
+            </div>
+            <div className="economy">
+              <div className="gold">
+                <Coins size={22} />
+                <strong>{game.gold}</strong>
+                <small>gold</small>
+              </div>
+              <div className="income">
+                <small>Next interest</small>
+                <strong>
+                  +{Math.min(game.wishes.includes('interest') ? 7 : 5, Math.floor(game.gold / 10))}{' '}
+                  <Coins size={12} />
+                </strong>
+              </div>
+            </div>
+            <div className="shop-controls">
+              <button
+                className={game.locked ? 'locked' : ''}
+                disabled={!prep}
+                onClick={() => send({ type: 'lock' })}
+                aria-label={game.locked ? 'Unlock shop' : 'Lock shop'}
+              >
+                {game.locked ? <LockKeyhole size={17} /> : <UnlockKeyhole size={17} />}
+              </button>
+              <button
+                disabled={!prep || game.gold < refreshCost(game)}
+                onClick={() => send({ type: 'refresh' })}
+              >
+                <RefreshCw size={16} /> Refresh{' '}
+                <span>
+                  {refreshCost(game)} <Coins size={12} />
+                </span>
+              </button>
+              <button
+                disabled={!prep || game.gold < 4 || game.level >= 9}
+                onClick={() => send({ type: 'xp' })}
+              >
+                <Plus size={17} /> Buy XP{' '}
+                <span>
+                  4 <Coins size={12} />
+                </span>
+              </button>
+            </div>
+          </div>
+          <div className="shop-content">
+            <div className="level-panel">
+              <div>
+                <span>Level</span>
+                <strong>{game.level}</strong>
+              </div>
+              <div className="xp-bar">
+                <i style={{ width: `${Math.min(100, (game.xp / XP[game.level]) * 100)}%` }} />
+              </div>
+              <small>
+                {game.level === 9 ? 'Maximum level' : `${game.xp} / ${XP[game.level]} XP`}
+              </small>
+              <div
+                className="odds"
+                title="Base tier odds. Locked tiers are removed and remaining odds renormalized."
+              >
+                {ODDS[game.level].map((v, i) => (
+                  <span key={i} className={`tier-${i + 1}`}>
+                    {v}%
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="shop-cards">
+              {game.shop.map((id, i) => {
+                const f = id ? FAMILIES[id] : null;
+                return f ? (
+                  <div key={`${i}-${id}`} className={`shop-card tier-${f.cost}`}>
+                    <button
+                      className="buy-card"
+                      disabled={!prep || game.gold < f.cost}
+                      onClick={() => send({ type: 'buy', slot: i })}
+                      aria-label={`Buy ${f.names[0]} for ${f.cost} gold`}
+                    >
+                      <span className="shop-role">{f.role}</span>
+                      <Sprite id={f.id} />
+                      <span className="shop-card-name">
+                        <strong>{f.names[0]}</strong>
+                        <b>
+                          <Coins size={13} />
+                          {f.cost}
+                        </b>
+                      </span>
+                      <span className="shop-types">
+                        {f.traits.filter((t) => t !== f.role).join(' / ')}
+                      </span>
+                      <span className="owned-count">
+                        {game.units.filter((u) => u.family === f.id).length
+                          ? `${game.units.filter((u) => u.family === f.id).length} in your team`
+                          : 'Recruit partner'}
+                      </span>
+                    </button>
+                    <button
+                      className="inspect-shop"
+                      aria-label={`Inspect ${f.names[0]}`}
+                      onClick={() => {
+                        setInspected(f.id);
+                        setSelected(null);
+                      }}
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="shop-card sold-card" key={i}>
+                    <Check size={21} />
+                    <span>Recruited</span>
+                    <small>Good things take a little space.</small>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+        <footer className="bottom-bar">
+          <span>
+            <span className="save-dot" />
+            {online
+              ? 'Connected to room server'
+              : saveError
+                ? 'Device save unavailable'
+                : 'Progress saved on this device'}
+          </span>
+          <span>Unofficial fan project · Pokémon belongs to its respective owners</span>
+          <button
+            onClick={() => {
+              setTrainer(game.trainer);
+              setModal('new');
+            }}
+          >
+            New expedition
+          </button>
+        </footer>
+      </main>
+      {(welcome || modal === 'new') && (
+        <Modal
+          title={
+            welcome ? 'Your next adventure is written in the stars.' : 'Begin a new expedition'
+          }
+          wide
+          onClose={() => {
+            setWelcome(false);
+            setModal(null);
+          }}
+        >
+          <div className="welcome-brand">
+            <Orbit size={42} />
+            <span>
+              Pokémon Checkmate <small>Galaxy · Season 0</small>
+            </span>
+          </div>
+          {modal === 'new' && (
+            <p className="muted">Starting replaces your current practice expedition.</p>
+          )}
+          {trainerChoices}
+        </Modal>
+      )}
+      {modal === 'guide' && (
+        <Modal title="The field guide" onClose={closeModal} wide>
+          <div className="guide-grid">
+            {[
+              [
+                'Draft your partners',
+                'Buy Pokémon from the five-slot shop. Your first three are deployed automatically. Refresh costs 2 gold; locking keeps the remaining offers for next round.',
+              ],
+              [
+                'Make room for a carry',
+                'Click a Pokémon, then a lower-half tile to move. Occupied tiles swap units. Empty bench slots return a selected unit to reserve. Dragging works too.',
+              ],
+              [
+                'Evolve together',
+                'Three equal-star copies merge automatically, anywhere in your roster. Three 2-stars make a 3-star. Legendaries need two copies per upgrade. Ditto copies a non-Legendary bench partner.',
+              ],
+              [
+                'Find your constellation',
+                'Unique deployed families count toward synergies. Bonuses apply to Pokémon carrying that trait. Duplicate families do not add extra synergy counts.',
+              ],
+              [
+                'Build your economy',
+                'Each round: 5 base gold, 1 per 10 saved (cap 5), streak income, and 1 extra for victory. Four gold buys 4 XP. Level is your team-size limit.',
+              ],
+              [
+                'Trust your team',
+                'Combat is automatic: approach, attack, gain energy, cast. Physical damage uses Defense; special uses Sp. Defense. All Pokémon recover for the next round.',
+              ],
+              [
+                'Wish upon a star',
+                'Every third round, pick one cosmic reward. Held items help one partner; Wishes reshape your run. Trainer powers charge after battles and are used in preparation.',
+              ],
+              [
+                'Across the galaxy',
+                'Practice ends after 15 rounds or at 0 HP. Stage 2 opens 4-cost units. Stage 3 can offer unlocked 5-cost Legendaries at level 7+. Friend rooms support 2–8 trainers on a local server.',
+              ],
+            ].map(([title, description], i) => (
+              <div key={title}>
+                <span className="guide-number">0{i + 1}</span>
+                <h3>{title}</h3>
+                <p>{description}</p>
+              </div>
+            ))}
+          </div>
+          <p className="fine">
+            Balance is provisional. This is an auto-battler, with Checkmate-specific stats and
+            family traits.
+          </p>
+        </Modal>
+      )}
+      {modal === 'dex' && (
+        <Modal title="The constellation Pokédex" onClose={closeModal} wide>
+          <label className="search-label">
+            Find a partner
+            <input
+              autoComplete="off"
+              value={dexSearch}
+              onChange={(e) => setDexSearch(e.target.value)}
+              placeholder="Name, type or role…"
+            />
+          </label>
+          <div className="dex-grid">
+            {ROSTER.filter((f) =>
+              [...f.names, ...f.traits].join(' ').toLowerCase().includes(dexSearch.toLowerCase()),
+            ).map((f) => (
+              <button
+                className={`dex-card tier-${f.cost}`}
+                key={f.id}
+                onClick={() => {
+                  setInspected(f.id);
+                  setSelected(null);
+                  setModal(null);
+                }}
+              >
+                <Sprite id={f.id} star={3} />
+                <strong>{f.names[0]}</strong>
+                <small>
+                  {f.names[2]} · {f.cost} gold
+                </small>
+                <span>{f.role}</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+      {game.phase === 'reward' && (
+        <Modal title="The cosmos has something for you." onClose={() => {}} wide closable={false}>
+          <p className="muted">Choose one reward. Carry its light into the next battle.</p>
+          <div className="reward-orbit">
+            <Orbit size={44} />
+          </div>
+          <div className="reward-grid">
+            {game.rewards.map((r) => (
+              <button
+                className={`reward-card ${r.kind}`}
+                key={r.id}
+                onClick={() => send({ type: 'reward', id: r.id })}
+              >
+                {r.kind === 'wish' ? (
+                  <Sparkles size={29} />
+                ) : r.kind === 'gold' ? (
+                  <Coins size={29} />
+                ) : r.kind === 'heal' ? (
+                  <Heart size={29} />
+                ) : (
+                  <Shield size={29} />
+                )}
+                <small>
+                  {r.kind === 'wish'
+                    ? 'Team Wish'
+                    : r.kind === 'item'
+                      ? 'Held item'
+                      : 'Cosmic gift'}
+                </small>
+                <h3>{r.name}</h3>
+                <p>{r.description}</p>
+                <span>
+                  Claim reward <ArrowRight size={15} />
+                </span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+      {game.phase === 'finished' && (
+        <Modal
+          title={game.hp > 0 ? 'A constellation to remember.' : 'Every star gets another chance.'}
+          onClose={() => {}}
+          closable={false}
+        >
+          <div className="finish">
+            <Crown size={56} />
+            <h3>
+              {online
+                ? `Placed #${room.players.find((p) => p.id === room.playerId)?.placement || '—'}`
+                : game.hp > 0
+                  ? 'Expedition complete'
+                  : 'Expedition ended'}
+            </h3>
+            <p>
+              {game.wins} victories · {game.losses} defeats · {game.round} rounds
+            </p>
+            <div className="history">
+              {game.history.map((h) => (
+                <span
+                  key={h.round}
+                  className={h.outcome === 'Victory' ? 'win' : 'loss'}
+                  title={`Round ${h.round}: ${h.outcome}`}
+                >
+                  {h.round}
+                </span>
+              ))}
+            </div>
+            <button
+              className="primary wide-button"
+              onClick={() => {
+                if (online) room.leave();
+                setLocal(createGame(Date.now() >>> 0, trainer, legends));
+                setBattle(null);
+                setWelcome(true);
+              }}
+            >
+              Choose your next trainer <ArrowRight size={17} />
+            </button>
+          </div>
+        </Modal>
+      )}
+      {modal === 'room' && (
+        <Modal title="Bring your rivals into orbit." onClose={closeModal}>
+          <p className="muted">
+            Private rooms for 2–8 trainers. Run the room server alongside the game. Scores are
+            provisional on this server.
+          </p>
+          <label className="search-label">
+            Trainer name
+            <input maxLength={20} value={roomName} onChange={(e) => setRoomName(e.target.value)} />
+          </label>
+          <div className="room-form">
+            <button
+              className="primary"
+              disabled={room.connecting}
+              onClick={() => room.connect('create', roomName, '', trainer)}
+            >
+              Create room
+            </button>
+            <label className="search-label">
+              Room code
+              <input
+                maxLength={6}
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                placeholder="ABC123"
+              />
+            </label>
+            <button
+              disabled={roomCode.length < 4 || room.connecting}
+              onClick={() => room.connect('join', roomName, roomCode, trainer)}
+            >
+              Join room <ArrowRight size={16} />
+            </button>
+          </div>
+          {room.code && (
+            <div className="room-info">
+              <strong>Room {room.code}</strong>
+              <p>Share this code with friends on the same server.</p>
+              {room.players.map((p) => (
+                <p key={p.id}>
+                  {p.name} {p.host ? '· Host' : ''} {p.connected ? '· Connected' : '· Offline'}
+                </p>
+              ))}
+              {room.isHost && room.status === 'lobby' && (
+                <button
+                  className="primary"
+                  disabled={room.players.length < 2}
+                  onClick={() => {
+                    room.start();
+                    setModal(null);
+                  }}
+                >
+                  Start match
+                </button>
+              )}
+              {room.status !== 'lobby' && (
+                <button onClick={() => setModal(null)}>Return to arena</button>
+              )}
+              <button className="text-button" onClick={room.leave}>
+                Leave room
+              </button>
+            </div>
+          )}
+          <button
+            className="text-button"
+            onClick={() => {
+              fetch('/api/standings')
+                .then((r) => {
+                  if (!r.ok) throw Error();
+                  return r.json();
+                })
+                .then((d) => setStandings(d.standings))
+                .catch(() => setStandings([]));
+            }}
+          >
+            View provisional standings <Crown size={14} />
+          </button>
+          {standings && (
+            <div className="standings">
+              <h3>Local server standings</h3>
+              <p className="fine">
+                Guest seats earn placement points. Account-based MMR comes later.
+              </p>
+              {standings.length ? (
+                standings.map((s, i) => (
+                  <div key={i}>
+                    <span>
+                      {i + 1}. {s.name}
+                    </span>
+                    <strong>{s.points} pts</strong>
+                    <small>
+                      {s.games} games · {s.wins} wins
+                    </small>
+                  </div>
+                ))
+              ) : (
+                <p className="muted">
+                  No results available yet. Complete a room match with the server running.
+                </p>
+              )}
+            </div>
+          )}
+          <p className="error" role="status">
+            {room.error}
+          </p>
+        </Modal>
+      )}
+    </div>
+  );
 }
-function BattleUnit({fighter:f,event,onClick}:{fighter:Fighter;event?:string;onClick:()=>void}) {return <div className={`board-piece combat-piece ${f.side?'enemy-piece':'allied-piece'} ${f.hp<=0?'defeated':''} ${event?'casting':''}`} style={{left:`${f.x*100/7}%`,top:`${f.y*100/6}%`}}><button onClick={onClick} aria-label={`Inspect ${unitName(f.family,f.star)}, ${Math.ceil(f.hp)} HP`}><Stars count={f.star}/><Sprite id={f.family} star={f.star}/><span className={`unit-health ${f.side?'enemy-health':''}`}><i style={{width:`${f.hp/f.maxHp*100}%`}}/></span><span className="unit-energy"><i style={{width:`${f.energy/f.maxEnergy*100}%`}}/></span>{f.shield>0&&<Shield className="shield-indicator" size={13}/>}</button>{event&&<span className="cast-label">{event}</span>}</div>;}
+function BattleUnit({
+  fighter: f,
+  event,
+  onClick,
+}: {
+  fighter: Fighter;
+  event?: string;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      className={`board-piece combat-piece ${f.side ? 'enemy-piece' : 'allied-piece'} ${f.hp <= 0 ? 'defeated' : ''} ${event ? 'casting' : ''}`}
+      style={{ left: `${(f.x * 100) / 7}%`, top: `${(f.y * 100) / 6}%` }}
+    >
+      <button
+        onClick={onClick}
+        aria-label={`Inspect ${unitName(f.family, f.star)}, ${Math.ceil(f.hp)} HP`}
+      >
+        <Stars count={f.star} />
+        <Sprite id={f.family} star={f.star} />
+        <span className={`unit-health ${f.side ? 'enemy-health' : ''}`}>
+          <i style={{ width: `${(f.hp / f.maxHp) * 100}%` }} />
+        </span>
+        <span className="unit-energy">
+          <i style={{ width: `${(f.energy / f.maxEnergy) * 100}%` }} />
+        </span>
+        {f.shield > 0 && <Shield className="shield-indicator" size={13} />}
+      </button>
+      {event && <span className="cast-label">{event}</span>}
+    </div>
+  );
+}
